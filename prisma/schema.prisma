@@ -1,0 +1,314 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  APPLICANT
+}
+
+/// Sexo binario (según requerimiento)
+enum Sexo {
+  MASCULINO
+  FEMENINO
+}
+
+/// Municipios dependientes del departamento (Anexo 2)
+model Municipio {
+  id             String       @id @default(cuid())
+  name           String
+  departamentoId String
+  departamento   Departamento @relation(fields: [departamentoId], references: [id], onDelete: Cascade)
+
+  // opcionalmente, relación inversa hacia solicitudes
+  solicitudes Solicitud[]
+
+  @@unique([name, departamentoId]) // mismo nombre en distinto depto permitido
+  @@index([departamentoId])
+}
+
+/// Departamentos de Guatemala (Anexo 1)
+model Departamento {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  municipios  Municipio[]
+  solicitudes Solicitud[]
+}
+
+enum SolicitudStatus {
+  PENDIENTE
+  EN_REVISION
+  APROBADA
+  RECHAZADA
+  REVALIDACION_PENDIENTE
+}
+
+enum Etnia {
+  MAYA
+  XINCA
+  GARIFUNA
+  LADINOS
+  EXTRANJERO
+  OTRA
+}
+
+enum Renglon {
+  PERSONAL_PERMANENTE_011
+  GRUPO_029
+  SUBGRUPO_18_Y_022
+  NO_APLICA
+  RENGLON_021
+}
+
+/// -------------------------
+/// Tablas lookup (seed)
+/// -------------------------
+model Entidad {
+  id          String      @id @default(cuid())
+  name        String      @unique // p.ej. "SECTOR EDUCACIÓN, CIENCIA, CULTURA Y DEPORTES"
+  // relaciones
+  solicitudes Solicitud[]
+}
+
+model Institucion {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  // relaciones
+  solicitudes Solicitud[]
+}
+
+model Dependencia {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  // relaciones
+  solicitudes Solicitud[]
+}
+
+/// -------------------------
+/// Core de identidad y acceso
+/// -------------------------
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  role              UserRole
+  passwordHash      String?
+  mustResetPassword Boolean  @default(false)
+  isActive          Boolean  @default(true)
+
+  // (Opcional) para mostrar en UI de cuenta
+  firstName String?
+  lastName  String?
+  phone     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // relaciones
+  sessions           Session[]
+  solicitudes        Solicitud[]          @relation("ApplicantSolicitudes")
+  reviews            Solicitud[]          @relation("ReviewerSolicitudes")
+  files              File[]               @relation("UserFiles")
+  PasswordResetToken PasswordResetToken[]
+  ReviewNote         ReviewNote[]
+}
+
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique @db.Uuid // token como UUID en DB
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// -------------------------
+/// Solicitudes y revisión
+/// -------------------------
+
+model Solicitud {
+  id String @id @default(cuid())
+
+  // Identificador único de persona (DPI/CUI)
+  dpi String @unique
+
+  // NUEVO: NIT (opcional). Si quieres impedir duplicados, agrega @unique.
+  nit String?
+
+  // Titular de la solicitud (puede ser el propio solicitante si ya creó cuenta)
+  applicantId String?
+  applicant   User?   @relation("ApplicantSolicitudes", fields: [applicantId], references: [id])
+
+  status SolicitudStatus @default(PENDIENTE)
+
+  // Datos personales
+  primerNombre    String
+  segundoNombre   String?
+  primerApellido  String
+  segundoApellido String?
+
+  // NUEVO: sexo y edad
+  sexo Sexo
+  edad Int? // si quieres forzar rango, valida en backend (p.ej. 18–100)
+
+  // Etnia (Anexo 3)
+  etnia Etnia
+
+  // Catálogos por FK (Anexo 4, 5, 6)
+  entidadId String?
+  entidad   Entidad? @relation(fields: [entidadId], references: [id])
+
+  institucionId String?
+  institucion   Institucion? @relation(fields: [institucionId], references: [id])
+
+  dependenciaId String? // sólo si Institución = CGC
+  dependencia   Dependencia? @relation(fields: [dependenciaId], references: [id])
+
+  // NUEVO: Ubicación (Anexo 1 y 2)
+  departamentoId String?
+  departamento   Departamento? @relation(fields: [departamentoId], references: [id])
+
+  municipioId String?
+  municipio   Municipio? @relation(fields: [municipioId], references: [id])
+
+  // NUEVO: Ciudad/Pais como texto libre (Moodle country standard lo puedes validar en backend)
+  ciudad String?
+  pais   String?
+
+  // NUEVO: Teléfono/Celular (texto para permitir +502, guiones, etc.)
+  telefono String?
+
+  // Laboral (Anexo 7)
+  renglon Renglon
+
+  // Profesional (Anexo 8)
+  // Cambio clave: evitar ENUMs muy largos en Postgres (límite 63 bytes).
+  // Guardamos el valor como String y validamos en backend/frontend.
+  colegio     String? @db.VarChar(64) // p.ej. "COLEGIO DE INGENIEROS DE GUATEMALA"
+  colegiadoNo String? // número activo, obligatorio si 'colegio' != "NO APLICA" (validación backend)
+
+  // Revisión
+  reviewerId  String?
+  reviewer    User?        @relation("ReviewerSolicitudes", fields: [reviewerId], references: [id])
+  reviewNotes ReviewNote[]
+
+  // Certificados anuales
+  certificates Certificate[]
+
+  // Archivos subidos
+  files File[]
+
+  // Auditoría
+  submittedAt DateTime? // cuando el solicitante “envía”
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  AccessToken AccessToken[]
+
+  @@index([entidadId])
+  @@index([institucionId])
+  @@index([dependenciaId])
+  @@index([departamentoId])
+  @@index([municipioId])
+}
+
+model ReviewNote {
+  id          String    @id @default(cuid())
+  solicitudId String
+  solicitud   Solicitud @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  authorId    String? // admin que comentó
+  author      User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  message     String
+  createdAt   DateTime  @default(now())
+
+  @@index([solicitudId])
+  @@index([authorId])
+}
+
+/// Token por correo para que el solicitante acceda/edite su solicitud
+model AccessToken {
+  id          String    @id @default(cuid())
+  solicitudId String
+  solicitud   Solicitud @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  purpose     String // "EDIT" | "RESUBMIT" | etc.
+
+  @@index([solicitudId])
+  @@index([expiresAt])
+}
+
+/// -------------------------
+/// Certificados y archivos
+/// -------------------------
+
+model Certificate {
+  id          String    @id @default(cuid())
+  solicitudId String
+  solicitud   Solicitud @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  numero      String // número de colegiado/certificado
+  issuedAt    DateTime
+  expiresAt   DateTime
+  status      String // "VIGENTE" | "VENCIDO" | "PENDIENTE"
+
+  fileId String?
+  file   File?   @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([solicitudId])
+  @@index([expiresAt])
+}
+
+model File {
+  id          String     @id @default(cuid())
+  path        String // ruta relativa en el server (p.ej. "uploads/solicitudes/abc.pdf")
+  mimeType    String
+  sizeBytes   Int
+  checksum    String? // opcional (integridad)
+  // relaciones
+  solicitudId String?
+  solicitud   Solicitud? @relation(fields: [solicitudId], references: [id], onDelete: SetNull)
+
+  uploadedByUserId String?
+  uploadedBy       User?   @relation("UserFiles", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime      @default(now())
+  Certificate Certificate[]
+
+  @@index([solicitudId])
+  @@index([uploadedByUserId])
+}
