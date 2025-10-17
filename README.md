@@ -21,3 +21,7 @@ Run the test cases.
 ## Learn More
 
 To learn Fastify, check out the [Fastify documentation](https://fastify.dev/docs/latest/).
+
+
+# Crear usuario 
+ADMIN_EMAIL=admin@registro.local ADMIN_PASSWORD='ClaveLarga123!' bun run scripts/create-admin.ts

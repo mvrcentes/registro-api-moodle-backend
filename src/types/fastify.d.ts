@@ -1,4 +1,5 @@
 // src/types/fastify.d.ts
+import type { Multipart } from "@fastify/multipart"
 import type { $Enums } from "../generated/prisma"
 
 declare module "fastify" {
@@ -8,5 +9,10 @@ declare module "fastify" {
   }
   interface FastifyRequest {
     currentUser?: SessionUser
+    /**
+     * Provided by @fastify/multipart when the request is multipart/form-data.
+     */
+    parts: () => AsyncIterableIterator<Multipart>
+    isMultipart(): boolean
   }
 }

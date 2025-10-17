@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import AutoLoad, { type AutoloadPluginOptions } from "@fastify/autoload"
+import multipart from "@fastify/multipart"
 import type { FastifyPluginAsync, FastifyServerOptions } from "fastify"
 import rateLimit from "@fastify/rate-limit"
 import helmet from "@fastify/helmet"
@@ -8,6 +9,7 @@ import cookie from "@fastify/cookie"
 import cors from "@fastify/cors"
 import { env } from "./env"
 import { prisma } from "./db"
+import { initCatalogCache } from "./modules/auth/singup/signup.helpers"
 
 export interface AppOptions
   extends FastifyServerOptions,
@@ -20,11 +22,19 @@ const app: FastifyPluginAsync<AppOptions> = async (
   opts
 ): Promise<void> => {
   // Place here your custom code!
+  await fastify.register(multipart, {
+    attachFieldsToBody: true,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB por archivo
+    throwFileSizeLimit: true,
+  })
+
   await fastify.register(helmet, {
     contentSecurityPolicy: false, // actívalo si defines CSP
     hsts: { maxAge: 15552000 }, // 180 días
   })
+
   await fastify.register(rateLimit, { max: 10, timeWindow: "1 minute" })
+
   await fastify.register(cors, {
     origin: "http://localhost:3000",
     credentials: true,

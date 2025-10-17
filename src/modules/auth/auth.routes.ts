@@ -6,6 +6,8 @@ import {
   adminLogout,
   adminMe,
   adminCreateUser,
+  // Signup
+  signupOneShot,
   // Common
   userMe,
 } from "./auth.controller"
@@ -26,6 +28,9 @@ const routes = async (app: FastifyInstance) => {
     { preHandler: requireAdmin },
     adminCreateUser
   )
+
+  // Signup
+  app.post("/signup", signupOneShot)
 
   // Common routes
   app.get("/me", userMe)

@@ -177,35 +177,32 @@ model Solicitud {
   primerApellido  String
   segundoApellido String?
 
-  // NUEVO: sexo y edad
   sexo Sexo
-  edad Int? // si quieres forzar rango, valida en backend (p.ej. 18–100)
+  edad Int
+
+  profesion           String?
+  puesto              String?
+  sector              String?
+  correoInstitucional String?
+  correoPersonal      String?
 
   // Etnia (Anexo 3)
   etnia Etnia
 
   // Catálogos por FK (Anexo 4, 5, 6)
-  entidadId String?
-  entidad   Entidad? @relation(fields: [entidadId], references: [id])
+  entidadName     String?
+  institucionName String?
+  dependenciaName String?
 
-  institucionId String?
-  institucion   Institucion? @relation(fields: [institucionId], references: [id])
+  // Ubicación (Anexo 1 y 2)
+  departamentoName String?
+  municipioName    String?
 
-  dependenciaId String? // sólo si Institución = CGC
-  dependencia   Dependencia? @relation(fields: [dependenciaId], references: [id])
-
-  // NUEVO: Ubicación (Anexo 1 y 2)
-  departamentoId String?
-  departamento   Departamento? @relation(fields: [departamentoId], references: [id])
-
-  municipioId String?
-  municipio   Municipio? @relation(fields: [municipioId], references: [id])
-
-  // NUEVO: Ciudad/Pais como texto libre (Moodle country standard lo puedes validar en backend)
+  // Ciudad/Pais como texto libre (Moodle country standard lo puedes validar en backend)
   ciudad String?
   pais   String?
 
-  // NUEVO: Teléfono/Celular (texto para permitir +502, guiones, etc.)
+  // Teléfono/Celular (texto para permitir +502, guiones, etc.)
   telefono String?
 
   // Laboral (Anexo 7)
@@ -233,15 +230,20 @@ model Solicitud {
   approvedAt  DateTime?
   rejectedAt  DateTime?
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  AccessToken AccessToken[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  AccessToken   AccessToken[]
+  Entidad       Entidad?      @relation(fields: [entidadId], references: [id])
+  entidadId     String?
+  Institucion   Institucion?  @relation(fields: [institucionId], references: [id])
+  institucionId String?
+  Dependencia   Dependencia?  @relation(fields: [dependenciaId], references: [id])
+  dependenciaId String?
 
-  @@index([entidadId])
-  @@index([institucionId])
-  @@index([dependenciaId])
-  @@index([departamentoId])
-  @@index([municipioId])
+  Municipio      Municipio?    @relation(fields: [municipioId], references: [id])
+  municipioId    String?
+  Departamento   Departamento? @relation(fields: [departamentoId], references: [id])
+  departamentoId String?
 }
 
 model ReviewNote {
