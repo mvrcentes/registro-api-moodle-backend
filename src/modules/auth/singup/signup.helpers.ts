@@ -93,7 +93,7 @@ export async function savePdf(
   dpi: string,
   kind: "dpi" | "contratos" | "certificados"
 ): Promise<SavedFile | null> {
-  if (!part || !part.file) return null
+  if (!part) return null
 
   const mimetype = "mimetype" in part && part.mimetype ? String(part.mimetype) : ""
   const filenameIn = "filename" in part && part.filename ? String(part.filename) : ""
@@ -109,15 +109,35 @@ export async function savePdf(
 
   const filename = `${uuid()}.pdf`
   const absPath = join(dir, filename)
-  const ws = createWriteStream(absPath)
 
+  let buffer: Buffer
   let sizeBytes = 0
-  const fileStream = part.file as NodeJS.ReadableStream
-  fileStream.on("data", (chunk: Buffer) => {
-    sizeBytes += chunk.length
-  })
 
-  await pipeline(fileStream, ws)
+  // Cuando attachFieldsToBody: true, @fastify/multipart provee toBuffer()
+  // Esta es la forma correcta y segura de obtener los datos del archivo
+  if ("toBuffer" in part && typeof part.toBuffer === "function") {
+    buffer = await part.toBuffer()
+    sizeBytes = buffer.length
+    
+    // Guardar el buffer en disco
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(absPath, buffer)
+  }
+  // Fallback: Si viene como stream puro (sin attachFieldsToBody)
+  else if ("file" in part && part.file) {
+    const ws = createWriteStream(absPath)
+    const fileStream = part.file as NodeJS.ReadableStream
+    
+    fileStream.on("data", (chunk: Buffer) => {
+      sizeBytes += chunk.length
+    })
+
+    await pipeline(fileStream, ws)
+  }
+  // No hay datos válidos
+  else {
+    return null
+  }
 
   const relPath = join(PUBLIC_UPLOADS_BASE, dpi, kind, filename).replace(/\\/g, "/")
   return { relPath, mimeType: mimetype || "application/pdf", sizeBytes }

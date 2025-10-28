@@ -160,22 +160,25 @@ export async function signupOneShot(req: FastifyRequest, reply: FastifyReply) {
   }
   const body: SignupOneShotInput = parsed.data
 
-  // (2) Leer archivos con el iterador multipart (tipado, sin any)
-  let dpiPart: MultipartFile | MulterLikePart | undefined
-  let contratoPart: MultipartFile | MulterLikePart | undefined
-  let certProfPart: MultipartFile | MulterLikePart | undefined
+  // (2) Obtener archivos desde req.body (attachFieldsToBody: true los pone ahí)
+  const b = req.body as unknown as SignupFiles
+  const pickFirst = (
+    x: MulterLikePart | MulterLikePart[] | undefined
+  ): MulterLikePart | undefined => (Array.isArray(x) ? x[0] : x)
 
-  // Fallback: si attachFieldsToBody ya consumió el stream, toma los files desde req.body
-  if (!dpiPart && !contratoPart && !certProfPart) {
-    const b = req.body as unknown as SignupFiles
-    const pickFirst = (
-      x: MulterLikePart | MulterLikePart[] | undefined
-    ): MulterLikePart | undefined => (Array.isArray(x) ? x[0] : x)
+  const dpiPart = pickFirst(b?.pdf_dpi)
+  const contratoPart = pickFirst(b?.pdf_contrato)
+  const certProfPart = pickFirst(b?.pdf_certificado_profesional)
 
-    dpiPart = pickFirst(b?.pdf_dpi)
-    contratoPart = pickFirst(b?.pdf_contrato)
-    certProfPart = pickFirst(b?.pdf_certificado_profesional)
-  }
+  // Log para debugging
+  req.log.info({
+    hasDpi: !!dpiPart,
+    hasContrato: !!contratoPart,
+    hasCertProf: !!certProfPart,
+    dpiHasToBuffer: dpiPart && "toBuffer" in dpiPart,
+    contratoHasToBuffer: contratoPart && "toBuffer" in contratoPart,
+    certProfHasToBuffer: certProfPart && "toBuffer" in certProfPart,
+  }, "Files received")
 
   // (3) Guardar PDFs (estructura por DPI)
   let dpiFile: SavedFile | null = null
