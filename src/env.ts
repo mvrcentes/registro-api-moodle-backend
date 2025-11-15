@@ -40,6 +40,10 @@ const BaseEnv = z.object({
     .string()
     .min(16, "SESSION_SECRET must be at least 16 chars"),
   DATABASE_URL: z.string().optional(),
+  // API Externa de Prefill (CGC)
+  PREFILL_API_URL: z.string().url("PREFILL_API_URL must be a valid URL"),
+  BASE_API_USER: z.string().min(1, "BASE_API_USER is required"),
+  BASE_API_PASSWORD: z.string().min(1, "BASE_API_PASSWORD is required"),
 })
 
 const base = BaseEnv.parse(process.env)

@@ -22,6 +22,7 @@ import {
   type SavedFile,
   savePdf,
   mapSexo,
+  mapEtnia,
 } from "./singup/signup.helpers"
 import type {
   Multipart,
@@ -290,7 +291,7 @@ export async function signupOneShot(req: FastifyRequest, reply: FastifyReply) {
         telefono: body.telefono,
         pais: body.pais,
         ciudad: body.ciudad,
-        etnia: body.etnia,
+        etnia: mapEtnia(body.etnia),
 
         // FK por relaciones
         entidadName: body.entidad,

@@ -78,6 +78,19 @@ export function mapSexo(s: string): $Enums.Sexo {
   throw new Error("SEXO_INVALID")
 }
 
+export function mapEtnia(s: string): $Enums.Etnia {
+  const u = norm(s)
+  // Mapeo directo
+  const validValues = ["MAYA", "XINCA", "GARIFUNA", "LADINOS", "EXTRANJERO", "OTRA"]
+  if (validValues.includes(u)) return u as $Enums.Etnia
+
+  // Mapeo de variantes comunes
+  if (u === "LADINO") return "LADINOS"
+  if (u === "OTRO" || u === "OTROS") return "OTRA"
+
+  throw new Error("ETNIA_INVALID")
+}
+
 // ===== almacenamiento =====
 // Base en disco y base pública
 const UPLOADS_BASE_DIR =
