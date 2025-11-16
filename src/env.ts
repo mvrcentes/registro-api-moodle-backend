@@ -44,6 +44,9 @@ const BaseEnv = z.object({
   PREFILL_API_URL: z.string().url("PREFILL_API_URL must be a valid URL"),
   BASE_API_USER: z.string().min(1, "BASE_API_USER is required"),
   BASE_API_PASSWORD: z.string().min(1, "BASE_API_PASSWORD is required"),
+  // API de Moodle
+  MOODLE_SIGNUP_API_URL: z.string().url("MOODLE_SIGNUP_API_URL must be a valid URL"),
+  MOODLE_SIGNUP_API_TOKEN: z.string().min(1, "MOODLE_SIGNUP_API_TOKEN is required"),
 })
 
 const base = BaseEnv.parse(process.env)

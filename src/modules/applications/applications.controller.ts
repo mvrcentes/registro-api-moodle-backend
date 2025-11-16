@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify"
 import { prisma } from "../../db"
 import type { $Enums } from "../../generated/prisma"
 import type { Prisma } from "../../generated/prisma"
+import { createMoodleUser } from "../moodle-lms/moodle-lms.service"
 
 type ApplicationStatus = "pending" | "in_review" | "approved" | "rejected"
 
@@ -85,10 +86,25 @@ export async function updateApplicationStatusHandler(
   const newStatus = statusBackendMap[status]
 
   try {
-    // Verificar que la solicitud existe
+    // Verificar que la solicitud existe y obtener datos necesarios
     const existingSolicitud = await prisma.solicitud.findUnique({
       where: { id },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        dpi: true,
+        primerNombre: true,
+        primerApellido: true,
+        segundoApellido: true,
+        correoPersonal: true,
+        correoInstitucional: true,
+        applicant: {
+          select: {
+            email: true,
+            passwordHash: true,
+          },
+        },
+      },
     })
 
     if (!existingSolicitud) {
@@ -125,6 +141,48 @@ export async function updateApplicationStatusHandler(
       })
     }
 
+    // Si se aprobó la solicitud, crear usuario en Moodle (no bloqueante)
+    if (newStatus === "APROBADA") {
+      const email =
+        existingSolicitud.correoInstitucional ??
+        existingSolicitud.correoPersonal ??
+        existingSolicitud.applicant?.email ??
+        ""
+
+      // Fire-and-forget: no await para no bloquear la respuesta
+      if (email) {
+        const moodleUsername = existingSolicitud.dpi
+        const temporaryPassword = `Moodle${existingSolicitud.dpi}!`
+
+        createMoodleUser({
+          username: moodleUsername,
+          password: temporaryPassword,
+          firstname: existingSolicitud.primerNombre,
+          lastname: `${existingSolicitud.primerApellido} ${
+            existingSolicitud.segundoApellido || ""
+          }`.trim(),
+          email: email,
+        })
+          .then((moodleResult) => {
+            req.log.info(
+              { moodleResult, solicitudId: id },
+              "Moodle user created successfully (async)"
+            )
+          })
+          .catch((moodleError) => {
+            req.log.error(
+              { err: moodleError, solicitudId: id },
+              "Error creating Moodle user (non-critical, async)"
+            )
+          })
+      } else {
+        req.log.warn(
+          { solicitudId: id },
+          "No email available for Moodle user creation"
+        )
+      }
+    }
+
     return reply.send({
       ok: true,
       data: {
@@ -132,7 +190,7 @@ export async function updateApplicationStatusHandler(
         status: statusMap[solicitud.status],
         message: `Solicitud ${
           status === "approved"
-            ? "aprobada"
+            ? "aprobada y usuario creado en Moodle"
             : status === "rejected"
             ? "rechazada"
             : "actualizada"

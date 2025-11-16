@@ -29,6 +29,7 @@ import type {
   MultipartFile,
   MultipartValue,
 } from "@fastify/multipart"
+import { createMoodleUser } from "../moodle-lms/moodle-lms.service"
 
 const COOKIE_NAME = process.env.NODE_ENV === "production" ? "__Host-sid" : "sid"
 const COOKIE_SECURE = process.env.NODE_ENV === "production"
@@ -355,17 +356,43 @@ export async function signupOneShot(req: FastifyRequest, reply: FastifyReply) {
 
     if (files.length > 0) await tx.file.createMany({ data: files })
 
-    return { solicitudId: solicitud.id }
+    return { solicitudId: solicitud.id, email: body.email, password: body.password }
   })
 
-  // (6) Respuesta
+  // (6) Si la solicitud fue aprobada automáticamente, crear usuario en Moodle (no bloqueante)
+  if (solicitudStatus === "APROBADA") {
+    const moodleUsername = body.dpi
+
+    // Fire-and-forget: no await para no bloquear la respuesta
+    createMoodleUser({
+      username: moodleUsername,
+      password: result.password,
+      firstname: body.primerNombre,
+      lastname: `${body.primerApellido} ${body.segundoApellido || ""}`.trim(),
+      email: result.email,
+    })
+      .then((moodleResult) => {
+        req.log.info(
+          { moodleResult, solicitudId: result.solicitudId },
+          "Moodle user created successfully for auto-approved application (async)"
+        )
+      })
+      .catch((moodleError) => {
+        req.log.error(
+          { err: moodleError, solicitudId: result.solicitudId },
+          "Error creating Moodle user (non-critical, async)"
+        )
+      })
+  }
+
+  // (7) Respuesta
   return reply.code(201).send({
     ok: true,
     data: {
       solicitudId: result.solicitudId,
       status: solicitudStatus,
       message: solicitudStatus === "APROBADA"
-        ? "Solicitud aprobada automáticamente"
+        ? "Solicitud aprobada automáticamente y usuario creado en Moodle"
         : "Solicitud pendiente de revisión",
       files: {
         dpi: dpiFile?.relPath ?? null,
