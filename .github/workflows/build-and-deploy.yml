@@ -28,7 +28,10 @@ jobs:
   deploy:
     name: Deploy to server (Docker Compose)
     needs: ci-build
-    runs-on: self-hosted  # tu runner del servidor
+    runs-on: 
+        - self-hosted  
+        - linux 
+        - prod-registro
 
     steps:
       - name: Checkout repo
