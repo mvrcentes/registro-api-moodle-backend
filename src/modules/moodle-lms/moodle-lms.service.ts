@@ -37,22 +37,74 @@ async function callMoodleFunction(
 // ============================================================
 
 /**
+ * Datos del perfil personalizado para Moodle
+ */
+export interface MoodleProfileData {
+  dpi: string
+  nit?: string
+  sexo: string
+  edad: number
+  departamento: string
+  municipio: string
+  etnia: string
+  telefono?: string
+  sector?: string
+  institucion?: string
+  dependencia?: string
+  renglon?: string
+  colegio?: string
+  colegiadoNo?: string
+}
+
+/**
  * Crear usuario en Moodle
+ * Moodle genera la contraseña automáticamente y envía email de bienvenida
  */
 export async function createMoodleUser(userData: {
   username: string
-  password: string
   firstname: string
   lastname: string
   email: string
+  profile?: MoodleProfileData
 }) {
-  return callMoodleFunction("core_user_create_users", {
+  const params: Record<string, unknown> = {
     "users[0][username]": userData.username,
-    "users[0][password]": userData.password,
     "users[0][firstname]": userData.firstname,
     "users[0][lastname]": userData.lastname,
     "users[0][email]": userData.email,
-  })
+    "users[0][createpassword]": 1,
+  }
+
+  // Agregar campos personalizados del perfil con los shortnames de Moodle
+  if (userData.profile) {
+    let i = 0
+    const p = userData.profile
+
+    const add = (shortname: string, value: string | number | undefined | null) => {
+      if (value !== undefined && value !== null && value !== "") {
+        params[`users[0][customfields][${i}][type]`] = shortname
+        params[`users[0][customfields][${i}][value]`] = String(value)
+        i++
+      }
+    }
+
+    add("DPI", p.dpi)
+    add("NIT", p.nit)
+    add("SEXO", p.sexo)
+    add("edad", p.edad)
+    add("DP", p.departamento)
+    add("MR", p.municipio)
+    add("ET", p.etnia)
+    add("CELULAR", p.telefono)
+    add("SECTOR", p.sector)
+    add("LABORES", p.institucion)
+    add("cgccampos", p.dependencia)
+    add("reglon", p.renglon)
+    add("colegio", p.colegio)
+    add("colegiado", p.colegiadoNo)
+  }
+
+  return callMoodleFunction("core_user_create_users", params)
 }
 
 /**

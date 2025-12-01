@@ -366,10 +366,25 @@ export async function signupOneShot(req: FastifyRequest, reply: FastifyReply) {
     // Fire-and-forget: no await para no bloquear la respuesta
     createMoodleUser({
       username: moodleUsername,
-      password: result.password,
       firstname: body.primerNombre,
       lastname: `${body.primerApellido} ${body.segundoApellido || ""}`.trim(),
       email: result.email,
+      profile: {
+        dpi: body.dpi,
+        nit: body.nit ?? undefined,
+        sexo: body.sexo,
+        edad: body.edad,
+        departamento: body.departamento_residencia ?? "",
+        municipio: body.municipio_residencia ?? "",
+        etnia: body.etnia,
+        telefono: body.telefono ?? undefined,
+        sector: body.sector ?? undefined,
+        institucion: body.institucion ?? undefined,
+        dependencia: body.dependencia ?? undefined,
+        renglon: body.renglon ?? undefined,
+        colegio: body.colegio ?? undefined,
+        colegiadoNo: body.numeroColegiado ?? undefined,
+      },
     })
       .then((moodleResult) => {
         req.log.info(

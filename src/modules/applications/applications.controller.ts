@@ -93,11 +93,24 @@ export async function updateApplicationStatusHandler(
         id: true,
         status: true,
         dpi: true,
+        nit: true,
         primerNombre: true,
         primerApellido: true,
         segundoApellido: true,
         correoPersonal: true,
         correoInstitucional: true,
+        sexo: true,
+        edad: true,
+        departamentoName: true,
+        municipioName: true,
+        etnia: true,
+        telefono: true,
+        sector: true,
+        institucionName: true,
+        dependenciaName: true,
+        renglon: true,
+        colegio: true,
+        colegiadoNo: true,
         applicant: {
           select: {
             email: true,
@@ -152,16 +165,30 @@ export async function updateApplicationStatusHandler(
       // Fire-and-forget: no await para no bloquear la respuesta
       if (email) {
         const moodleUsername = existingSolicitud.dpi
-        const temporaryPassword = `Moodle${existingSolicitud.dpi}!`
 
         createMoodleUser({
           username: moodleUsername,
-          password: temporaryPassword,
           firstname: existingSolicitud.primerNombre,
           lastname: `${existingSolicitud.primerApellido} ${
             existingSolicitud.segundoApellido || ""
           }`.trim(),
           email: email,
+          profile: {
+            dpi: existingSolicitud.dpi,
+            nit: existingSolicitud.nit ?? undefined,
+            sexo: existingSolicitud.sexo,
+            edad: existingSolicitud.edad,
+            departamento: existingSolicitud.departamentoName ?? "",
+            municipio: existingSolicitud.municipioName ?? "",
+            etnia: existingSolicitud.etnia,
+            telefono: existingSolicitud.telefono ?? undefined,
+            sector: existingSolicitud.sector ?? undefined,
+            institucion: existingSolicitud.institucionName ?? undefined,
+            dependencia: existingSolicitud.dependenciaName ?? undefined,
+            renglon: existingSolicitud.renglon ?? undefined,
+            colegio: existingSolicitud.colegio ?? undefined,
+            colegiadoNo: existingSolicitud.colegiadoNo ?? undefined,
+          },
         })
           .then((moodleResult) => {
             req.log.info(
