@@ -1,6 +1,10 @@
 // src/modules/moodle-lms/moodle-lms.service.ts
 import axios from "axios"
+import https from "node:https"
 import { env } from "../../env"
+
+// Ignorar verificación SSL (el servidor de Moodle tiene certificado no verificable)
+const httpsAgent = new https.Agent({ rejectUnauthorized: false })
 
 /**
  * Cliente axios para la API de Moodle LMS
@@ -11,6 +15,7 @@ const moodleApiClient = axios.create({
   headers: {
     "Content-Type": "application/x-www-form-urlencoded",
   },
+  httpsAgent,
 })
 
 /**
