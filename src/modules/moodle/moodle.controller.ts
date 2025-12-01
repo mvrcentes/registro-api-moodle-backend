@@ -11,11 +11,17 @@ type PrefillRequest = FastifyRequest<{ Body: PrefillBody }>
  * Consulta la API externa y mapea los datos al formato esperado
  */
 export async function prefillController(req: PrefillRequest, reply: FastifyReply) {
+  console.log("[Prefill Controller] Request received")
+  console.log("[Prefill Controller] Request body:", JSON.stringify(req.body, null, 2))
+
   try {
     const { dpi } = PrefillBodySchema.parse(req.body)
+    console.log("[Prefill Controller] Parsed DPI:", dpi)
 
     // Consultar datos del usuario en la API externa (usando el service)
+    console.log("[Prefill Controller] Calling getUserByDpi...")
     const response = await getUserByDpi(dpi)
+    console.log("[Prefill Controller] getUserByDpi returned:", typeof response)
 
     // Validar estructura de respuesta
     const respData = response as { list?: Array<Record<string, unknown>> }
@@ -146,6 +152,12 @@ export async function prefillController(req: PrefillRequest, reply: FastifyReply
       },
     })
   } catch (error: unknown) {
+    console.log("[Prefill Controller] CATCH block - Error occurred")
+    if (error instanceof Error) {
+      console.log("[Prefill Controller] Error name:", error.name)
+      console.log("[Prefill Controller] Error message:", error.message)
+      console.log("[Prefill Controller] Error stack:", error.stack)
+    }
     req.log.error({ error }, "Prefill error")
 
     // Manejar error 404 (DPI no encontrado)
