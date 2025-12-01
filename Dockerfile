@@ -2,8 +2,8 @@ FROM oven/bun:1 AS app
 
 WORKDIR /app
 
-# 🔧 Instalamos netcat para poder usar "nc"
-RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
+# 🔧 Instalamos netcat y openssl (requerido por Prisma)
+RUN apt-get update && apt-get install -y netcat-openbsd openssl && rm -rf /var/lib/apt/lists/*
 
 # Copiamos manifiestos
 COPY package.json bun.lockb* package-lock.json* ./
