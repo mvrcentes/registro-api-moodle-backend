@@ -22,14 +22,36 @@ export async function prefillController(req: PrefillRequest, reply: FastifyReply
     console.log("[Prefill Controller] Calling getUserByDpi...")
     const response = await getUserByDpi(dpi)
     console.log("[Prefill Controller] getUserByDpi returned:", typeof response)
+    console.log("[Prefill Controller] Response structure:", JSON.stringify(response, null, 2))
 
-    // Validar estructura de respuesta
-    const respData = response as { list?: Array<Record<string, unknown>> }
+    // Validar estructura de respuesta - soportar múltiples formatos
+    const respData = response as { list?: Array<Record<string, unknown>>; data?: Record<string, unknown> | Array<Record<string, unknown>> }
 
-    if (respData?.list && respData.list.length > 0) {
-      // Los datos están en response.data.list[0]
-      const userData = respData.list[0]
+    // Extraer datos del usuario de diferentes estructuras posibles
+    let userData: Record<string, unknown> | null = null
 
+    if (respData?.list && Array.isArray(respData.list) && respData.list.length > 0) {
+      // Formato: { list: [...] }
+      userData = respData.list[0]
+      console.log("[Prefill Controller] Found data in list[0]")
+    } else if (respData?.data && Array.isArray(respData.data) && respData.data.length > 0) {
+      // Formato: { data: [...] }
+      userData = respData.data[0]
+      console.log("[Prefill Controller] Found data in data[0]")
+    } else if (respData?.data && !Array.isArray(respData.data) && typeof respData.data === 'object') {
+      // Formato: { data: {...} }
+      userData = respData.data as Record<string, unknown>
+      console.log("[Prefill Controller] Found data in data object")
+    } else if (response && typeof response === 'object' && !Array.isArray(response) && !('list' in (response as object)) && !('data' in (response as object))) {
+      // Formato: directamente el objeto de usuario { dpi, primerNombre, ... }
+      const directData = response as Record<string, unknown>
+      if (directData.dpi || directData.primerNombre || directData.primer_nombre) {
+        userData = directData
+        console.log("[Prefill Controller] Found data as direct object")
+      }
+    }
+
+    if (userData) {
       // Mapear el país correctamente
       let paisValue = (userData.pais as string) || (userData.country as string) || "Guatemala"
       if (paisValue === "GUATEMALA") {
@@ -108,47 +130,36 @@ export async function prefillController(req: PrefillRequest, reply: FastifyReply
       })
     }
 
-    // Si no hay datos en la lista o la lista está vacía
-    if (respData?.list && respData.list.length === 0) {
-      return reply.code(200).send({
-        success: true,
-        data: {
-          dpi,
-          primerNombre: "",
-          segundoNombre: "",
-          primerApellido: "",
-          segundoApellido: "",
-          email: "",
-          correoInstitucional: "",
-          correoPersonal: "",
-          fechaNacimiento: "",
-          sexo: "",
-          pais: "Guatemala",
-          departamento: "",
-          municipio: "",
-          nit: "",
-          telefono: "",
-          entidad: "",
-          institucion: "",
-          dependencia: "",
-          renglon: "",
-          profesion: "",
-          puesto: "",
-          sector: "",
-          colegio: "",
-          numeroColegiado: "",
-          message: "DPI no encontrado - complete los campos manualmente",
-        },
-      })
-    }
-
-    // No se recibieron datos del servidor
-    return reply.code(500).send({
-      success: false,
-      error: {
-        status: 500,
-        message: "No se recibieron datos del servidor",
-        error: "No Data",
+    // Si no hay datos del usuario (lista vacía o respuesta sin datos)
+    console.log("[Prefill Controller] No user data found, returning empty response")
+    return reply.code(200).send({
+      success: true,
+      data: {
+        dpi,
+        primerNombre: "",
+        segundoNombre: "",
+        primerApellido: "",
+        segundoApellido: "",
+        email: "",
+        correoInstitucional: "",
+        correoPersonal: "",
+        fechaNacimiento: "",
+        sexo: "",
+        pais: "Guatemala",
+        departamento: "",
+        municipio: "",
+        nit: "",
+        telefono: "",
+        entidad: "",
+        institucion: "",
+        dependencia: "",
+        renglon: "",
+        profesion: "",
+        puesto: "",
+        sector: "",
+        colegio: "",
+        numeroColegiado: "",
+        message: "DPI no registrado en la base de datos de la CGC",
       },
     })
   } catch (error: unknown) {
@@ -190,21 +201,71 @@ export async function prefillController(req: PrefillRequest, reply: FastifyReply
           sector: "",
           colegio: "",
           numeroColegiado: "",
-          message: "DPI no encontrado - complete los campos manualmente",
+          message: "DPI no registrado en la base de datos de la CGC",
         },
       })
     }
 
-    // Otros errores
-    const status = axios.isAxiosError(error) ? error.response?.status ?? 500 : 500
-    const message = axios.isAxiosError(error)
-      ? error.response?.data?.message ?? error.message ?? "Error al consultar DPI"
-      : "Error al consultar DPI"
-    const errorStr = axios.isAxiosError(error) ? error.response?.data?.error ?? "API Error" : "API Error"
+    // Otros errores con mensajes descriptivos
+    let status = 500
+    let message = "Error al consultar DPI"
+    let errorStr = "API Error"
+    let errorType = "UNKNOWN_ERROR"
+
+    if (axios.isAxiosError(error)) {
+      status = error.response?.status ?? 500
+
+      // Mensajes específicos según el código de error
+      switch (status) {
+        case 401:
+          message = "Error de autenticación con el servicio externo. Contacte al administrador."
+          errorStr = "Authentication Error"
+          errorType = "AUTH_ERROR"
+          break
+        case 403:
+          message = "Acceso denegado al servicio externo. Su IP podría no estar autorizada."
+          errorStr = "Access Denied"
+          errorType = "ACCESS_DENIED"
+          break
+        case 408:
+        case 504:
+          message = "El servicio externo no respondió a tiempo. Intente nuevamente."
+          errorStr = "Timeout"
+          errorType = "TIMEOUT"
+          break
+        case 500:
+        case 502:
+        case 503:
+          message = "El servicio externo no está disponible. Intente más tarde."
+          errorStr = "Service Unavailable"
+          errorType = "SERVICE_UNAVAILABLE"
+          break
+        default:
+          message = error.response?.data?.message ?? error.message ?? "Error al consultar DPI"
+          errorStr = error.response?.data?.error ?? "API Error"
+          errorType = "API_ERROR"
+      }
+
+      // Error de conexión/red
+      if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
+        message = "No se puede conectar al servicio externo. Verifique su conexión."
+        errorStr = "Connection Error"
+        errorType = "CONNECTION_ERROR"
+        status = 503
+      }
+
+      if (error.code === "ETIMEDOUT" || error.code === "ECONNABORTED") {
+        message = "La conexión con el servicio externo tardó demasiado. Intente nuevamente."
+        errorStr = "Timeout"
+        errorType = "TIMEOUT"
+        status = 408
+      }
+    }
 
     return reply.code(status).send({
       success: false,
       error: {
+        type: errorType,
         status,
         message,
         error: errorStr,
