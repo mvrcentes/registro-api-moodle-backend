@@ -154,7 +154,7 @@ export async function updateApplicationStatusHandler(
       })
     }
 
-    // Si se aprobó la solicitud, crear usuario en Moodle (no bloqueante)
+    // Si se aprobó la solicitud, crear usuario en Moodle
     if (newStatus === "APROBADA") {
       const email =
         existingSolicitud.correoInstitucional ??
@@ -162,51 +162,83 @@ export async function updateApplicationStatusHandler(
         existingSolicitud.applicant?.email ??
         ""
 
-      // Fire-and-forget: no await para no bloquear la respuesta
       if (email) {
         const moodleUsername = existingSolicitud.dpi
 
-        createMoodleUser({
-          username: moodleUsername,
-          firstname: existingSolicitud.primerNombre,
-          lastname: `${existingSolicitud.primerApellido} ${
-            existingSolicitud.segundoApellido || ""
-          }`.trim(),
-          email: email,
-          profile: {
-            dpi: existingSolicitud.dpi,
-            nit: existingSolicitud.nit ?? undefined,
-            sexo: existingSolicitud.sexo,
-            edad: existingSolicitud.edad,
-            departamento: existingSolicitud.departamentoName ?? "",
-            municipio: existingSolicitud.municipioName ?? "",
-            etnia: existingSolicitud.etnia,
-            telefono: existingSolicitud.telefono ?? undefined,
-            sector: existingSolicitud.sector ?? undefined,
-            institucion: existingSolicitud.institucionName ?? undefined,
-            dependencia: existingSolicitud.dependenciaName ?? undefined,
-            renglon: existingSolicitud.renglon ?? undefined,
-            colegio: existingSolicitud.colegio ?? undefined,
-            colegiadoNo: existingSolicitud.colegiadoNo ?? undefined,
-          },
-        })
-          .then((moodleResult) => {
-            req.log.info(
-              { moodleResult, solicitudId: id },
-              "Moodle user created successfully (async)"
-            )
+        try {
+          const moodleResult = await createMoodleUser({
+            username: moodleUsername,
+            firstname: existingSolicitud.primerNombre,
+            lastname: `${existingSolicitud.primerApellido} ${
+              existingSolicitud.segundoApellido || ""
+            }`.trim(),
+            email: email,
+            profile: {
+              dpi: existingSolicitud.dpi,
+              nit: existingSolicitud.nit ?? undefined,
+              sexo: existingSolicitud.sexo,
+              edad: existingSolicitud.edad,
+              departamento: existingSolicitud.departamentoName ?? "",
+              municipio: existingSolicitud.municipioName ?? "",
+              etnia: existingSolicitud.etnia,
+              telefono: existingSolicitud.telefono ?? undefined,
+              sector: existingSolicitud.sector ?? undefined,
+              institucion: existingSolicitud.institucionName ?? undefined,
+              dependencia: existingSolicitud.dependenciaName ?? undefined,
+              renglon: existingSolicitud.renglon ?? undefined,
+              colegio: existingSolicitud.colegio ?? undefined,
+              colegiadoNo: existingSolicitud.colegiadoNo ?? undefined,
+            },
           })
-          .catch((moodleError) => {
-            req.log.error(
-              { err: moodleError, solicitudId: id },
-              "Error creating Moodle user (non-critical, async)"
-            )
+
+          req.log.info(
+            { moodleResult, solicitudId: id },
+            "Moodle user created successfully"
+          )
+
+          return reply.send({
+            ok: true,
+            data: {
+              id: solicitud.id,
+              status: statusMap[solicitud.status],
+              message: "Solicitud aprobada y usuario creado en Moodle exitosamente",
+            },
           })
+        } catch (moodleError) {
+          req.log.error(
+            { err: moodleError, solicitudId: id },
+            "Error creating Moodle user"
+          )
+
+          // Extraer información del error de Moodle
+          const errorMessage = moodleError instanceof Error ? moodleError.message : "Error desconocido"
+          const errorCode = (moodleError as { errorcode?: string })?.errorcode || "unknown"
+          const debugInfo = (moodleError as { debuginfo?: string })?.debuginfo
+
+          return reply.code(400).send({
+            ok: false,
+            error: {
+              type: "MOODLE_ERROR",
+              code: errorCode,
+              message: errorMessage,
+              debuginfo: debugInfo,
+              userMessage: `Error al crear usuario en Moodle: ${errorMessage}`,
+            },
+          })
+        }
       } else {
         req.log.warn(
           { solicitudId: id },
           "No email available for Moodle user creation"
         )
+
+        return reply.code(400).send({
+          ok: false,
+          error: {
+            type: "VALIDATION_ERROR",
+            message: "No hay email disponible para crear usuario en Moodle",
+          },
+        })
       }
     }
 
@@ -216,9 +248,7 @@ export async function updateApplicationStatusHandler(
         id: solicitud.id,
         status: statusMap[solicitud.status],
         message: `Solicitud ${
-          status === "approved"
-            ? "aprobada y usuario creado en Moodle"
-            : status === "rejected"
+          status === "rejected"
             ? "rechazada"
             : "actualizada"
         } exitosamente`,

@@ -25,16 +25,56 @@ async function callMoodleFunction(
   wsfunction: string,
   params: Record<string, unknown> = {}
 ) {
-  const response = await moodleApiClient.post("", null, {
-    params: {
-      wstoken: env.MOODLE_SIGNUP_API_TOKEN,
-      wsfunction,
-      moodlewsrestformat: "json",
-      ...params,
-    },
-  })
+  console.log("[Moodle LMS] Calling function:", wsfunction)
+  console.log("[Moodle LMS] API URL:", env.MOODLE_SIGNUP_API_URL)
+  console.log("[Moodle LMS] Params:", JSON.stringify(params, null, 2))
 
-  return response.data
+  try {
+    const response = await moodleApiClient.post("", null, {
+      params: {
+        wstoken: env.MOODLE_SIGNUP_API_TOKEN,
+        wsfunction,
+        moodlewsrestformat: "json",
+        ...params,
+      },
+    })
+
+    console.log("[Moodle LMS] Response status:", response.status)
+    console.log("[Moodle LMS] Response data:", JSON.stringify(response.data, null, 2))
+
+    // Moodle retorna errores en el body con status 200
+    if (response.data?.exception || response.data?.errorcode) {
+      console.log("[Moodle LMS] ERROR detected in response:")
+      console.log("[Moodle LMS] - Exception:", response.data.exception)
+      console.log("[Moodle LMS] - Error code:", response.data.errorcode)
+      console.log("[Moodle LMS] - Message:", response.data.message)
+      console.log("[Moodle LMS] - Debug info:", response.data.debuginfo)
+
+      // Lanzar error con información de Moodle para que se pueda manejar en el frontend
+      const moodleError = new Error(response.data.message || "Error en Moodle") as Error & {
+        errorcode: string
+        exception: string
+        debuginfo?: string
+      }
+      moodleError.errorcode = response.data.errorcode
+      moodleError.exception = response.data.exception
+      moodleError.debuginfo = response.data.debuginfo
+      throw moodleError
+    }
+
+    return response.data
+  } catch (error) {
+    console.log("[Moodle LMS] Request FAILED")
+    if (axios.isAxiosError(error)) {
+      console.log("[Moodle LMS] - Status:", error.response?.status)
+      console.log("[Moodle LMS] - Status text:", error.response?.statusText)
+      console.log("[Moodle LMS] - Response data:", JSON.stringify(error.response?.data, null, 2))
+      console.log("[Moodle LMS] - Error code:", error.code)
+    } else if (error instanceof Error) {
+      console.log("[Moodle LMS] - Error:", error.message)
+    }
+    throw error
+  }
 }
 
 // ============================================================
